@@ -4,5 +4,6 @@
 ## Author: PsyKzz
 ## Version: 0.0.1
 ## RequiredDeps: Auctionator
+## X-Curse-Project-ID: 1463417
 
 core.lua
