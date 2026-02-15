@@ -7,3 +7,4 @@ ignore:
   - .gitignore
   - .vscode
   - .pkgmeta
+  - README.md
