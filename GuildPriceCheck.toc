@@ -1,4 +1,4 @@
-## Interface: 50505
+## Interface: 20505
 ## Title: GuildPriceCheck
 ## Notes: Replies to guild queries with Auctionator prices.
 ## Author: PsyKzz
