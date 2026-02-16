@@ -1,14 +1,27 @@
 local addonName, ns = ...
 
-C_ChatInfo.RegisterAddonMessagePrefix(ns.PREFIX)
+ns.VERSION = GetAddOnMetadata(addonName, "Version"):match("^([0-9.]+)") or "0.0.0"
 
-ns.OnlineAddonUsers = {}     -- [name] = { rank = index, guid = string, lastSeen = time }
+-- Try to use Ace3 comm if available, fall back to addon messages
+ns.AceComm = (LibStub and LibStub:GetLibrary("AceComm-3.0", true) ~= nil) and LibStub("AceComm-3.0") or nil
+
+if ns.AceComm then
+    ns.AceComm:RegisterComm(ns.PREFIX, function(prefix, message, channel, sender)
+        ns.HandleAddonMessage(prefix, message, channel, sender)
+    end)
+else
+    C_ChatInfo.RegisterAddonMessagePrefix(ns.PREFIX)
+end
+
+ns.OnlineAddonUsers = {}     -- [name] = { name = string, rank = index, guid = string, version = string }
 
 -- --- Main Event Handler ---
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("CHAT_MSG_GUILD")
-frame:RegisterEvent("CHAT_MSG_ADDON")
+if not ns.AceComm then
+    frame:RegisterEvent("CHAT_MSG_ADDON")
+end
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_LOGOUT")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -23,23 +36,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
         ns.ThrottledSendPresence("PING")
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
-        if prefix ~= ns.PREFIX or sender == UnitName("player") then return end
-
-        local msgType, rank, guid = strsplit(":", message)
-
-        if msgType == "LEAVE" then
-            ns.OnlineAddonUsers[sender] = nil
-        else
-            ns.OnlineAddonUsers[sender] = {
-                name = sender,
-                rank = tonumber(rank) or 99,
-                guid = guid,
-            }
-
-            if msgType == "PING" then
-                C_Timer.After(math.random(1, 15) / 10, function() ns.SendPresence("PONG") end)
-            end
-        end
+        ns.HandleAddonMessage(prefix, message, channel, sender)
     elseif event == "CHAT_MSG_GUILD" then
         local message, sender = ...
 
@@ -73,4 +70,26 @@ frame:SetScript("OnEvent", function(self, event, ...)
         end
     end
 end)
+
+function ns.HandleAddonMessage(prefix, message, channel, sender)
+    if prefix ~= ns.PREFIX or sender == UnitName("player") then return end
+
+    local msgType, rank, guid, version = strsplit(":", message)
+    version = version or "0.0.0"
+
+    if msgType == "LEAVE" then
+        ns.OnlineAddonUsers[sender] = nil
+    else
+        ns.OnlineAddonUsers[sender] = {
+            name = sender,
+            rank = tonumber(rank) or 99,
+            guid = guid,
+            version = version,
+        }
+
+        if msgType == "PING" then
+            C_Timer.After(math.random(1, 15) / 10, function() ns.SendPresence("PONG") end)
+        end
+    end
+end
 

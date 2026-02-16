@@ -3,7 +3,7 @@ local addonName, ns = ...
 ns.PREFIX = "GPCL_SYNC"
 
 -- compat
-local C_ChatInfo_SendChatMessage = C_ChatInfo.SendChatMessage or SendChatMessage -- Fallback for older WoW versions
+local C_ChatInfo_SendChatMessage = C_ChatInfo.SendChatMessage or SendChatMessage
 local C_Item_GetItemInfo = C_Item.GetItemInfo or GetItemInfo
 
 function ns.SendChatMessage(message, channel)
@@ -25,6 +25,20 @@ function ns.CreateThrottledFunction(func, duration)
     end
 end
 
+function ns.CompareVersions(v1, v2)
+    -- Returns: -1 if v1 < v2, 0 if equal, 1 if v1 > v2
+    local p1_1, p1_2, p1_3 = v1:match("^(%d+)%.(%d+)%.(%d+)")
+    local p2_1, p2_2, p2_3 = v2:match("^(%d+)%.(%d+)%.(%d+)")
+    
+    p1_1, p1_2, p1_3 = tonumber(p1_1) or 0, tonumber(p1_2) or 0, tonumber(p1_3) or 0
+    p2_1, p2_2, p2_3 = tonumber(p2_1) or 0, tonumber(p2_2) or 0, tonumber(p2_3) or 0
+    
+    if p1_1 ~= p2_1 then return p1_1 > p2_1 and 1 or -1 end
+    if p1_2 ~= p2_2 then return p1_2 > p2_2 and 1 or -1 end
+    if p1_3 ~= p2_3 then return p1_3 > p2_3 and 1 or -1 end
+    return 0
+end
+
 function ns.IsLeader()
     if not IsInGuild() then return true end
 
@@ -34,16 +48,23 @@ function ns.IsLeader()
     if not myRank then return true end
 
     local candidates = {}
-    table.insert(candidates, { name = myName, rank = myRank, guid = myGUID })
+    table.insert(candidates, { name = myName, rank = myRank, guid = myGUID, version = ns.VERSION })
 
     for name, data in pairs(ns.OnlineAddonUsers) do
         local isOnline = ns.IsPlayerActuallyOnline(name)
         if isOnline then
-            table.insert(candidates, { name = name, rank = data.rank, guid = data.guid })
+            table.insert(candidates, { name = name, rank = data.rank, guid = data.guid, version = data.version })
         end
     end
 
     table.sort(candidates, function(a, b)
+        -- Filter out users with older versions - they should never be elected
+        local aIsNewer = ns.CompareVersions(a.version, b.version) >= 0
+        local bIsNewer = ns.CompareVersions(b.version, a.version) >= 0
+        
+        if aIsNewer and not bIsNewer then return true end
+        if bIsNewer and not aIsNewer then return false end
+        
         if a.rank ~= b.rank then return a.rank < b.rank end
         return a.guid < b.guid
     end)
@@ -57,12 +78,21 @@ ns.ThrottledGuildPresenceUpdate = ns.CreateThrottledFunction(function()
     end
 end, 10)
 
+function ns.SendAddonMessage(prefix, message, channel, target)
+    if ns.AceComm then
+        ns.AceComm:SendCommMessage(prefix, message, channel, target)
+    else
+        C_ChatInfo.SendAddonMessage(prefix, message, channel, target)
+    end
+end
+
 function ns.SendPresence(msgType)
     if not IsInGuild() then return end
     local _, _, rankIndex = GetGuildInfo("player")
     local guid = UnitGUID("player")
-    local payload = string.format("%s:%d:%s", msgType, rankIndex or 99, guid)
-    C_ChatInfo.SendAddonMessage(ns.PREFIX, payload, "GUILD")
+    local payload = string.format("%s:%d:%s:%s", msgType, rankIndex or 99, guid, ns.VERSION)
+    
+    ns.SendAddonMessage(ns.PREFIX, payload, "GUILD")
 
     -- Additionally request roster information to validate "pongs" are online still.
     ns.ThrottledGuildPresenceUpdate()
@@ -102,12 +132,9 @@ function ns.GetStatusColor(isMe, isLeader)
     return "ffffffff"                      -- White for Others
 end
 
-
 function ns.IsPlayerActuallyOnline(targetName)
     if not IsInGuild() then return false end
     
-    -- Ensure we have the full name (Name-Realm) for comparison
-    -- If targetName is just "Character", we need to handle that
     local myRealm = GetRealmName():gsub("%s+", "")
     if not targetName:find("-") then
         targetName = targetName .. "-" .. myRealm
@@ -115,9 +142,6 @@ function ns.IsPlayerActuallyOnline(targetName)
 
     local numMembers = GetNumGuildMembers()
     for i = 1, numMembers do
-        -- GetGuildRosterInfo returns:
-        -- fullName, rankName, rankIndex, level, classDisplayName, zone, 
-        -- publicNote, officerNote, isOnline, status, classFileName
         local fullName, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
         
         if fullName == targetName then
