@@ -20,12 +20,21 @@ jobs:
       - name: Get latest tag and increment patch version
         id: version
         run: |
-          # Get the latest tag, default to v0.0.0 if none exists
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # Get the latest semantic version tag, default to v0.0.0 if none exists
+          latest_tag=$(git tag -l 'v*.*.*' | sort -V | tail -n1)
+          if [ -z "$latest_tag" ]; then
+            latest_tag="v0.0.0"
+          fi
           echo "Latest tag: $latest_tag"
           
           # Extract version numbers (remove 'v' prefix)
           version=${latest_tag#v}
+          
+          # Validate version format (should be major.minor.patch)
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Invalid version format: $version"
+            exit 1
+          fi
           
           # Split version into major, minor, patch
           IFS='.' read -r major minor patch <<< "$version"
@@ -41,6 +50,12 @@ jobs:
         env:
           NEW_VERSION: ${{ steps.version.outputs.new_version }}
         run: |
+          # Check if tag already exists
+          if git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Tag $NEW_VERSION already exists, skipping"
+            exit 0
+          fi
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$NEW_VERSION" -m "Auto version bump to $NEW_VERSION"
