@@ -10,7 +10,7 @@ local C_Item_GetItemInfo = C_Item.GetItemInfo or GetItemInfo
 
 local LAST_SEEN_CLEANUP = 300 -- 5 minutes
 
-ns.OnlineAddonUsers = {} -- [name] = { rank = index, guid = string, lastSeen = time }
+ns.OnlineAddonUsers = {}      -- [name] = { rank = index, guid = string, lastSeen = time }
 
 local function IsLeader()
     if not IsInGuild() then return true end
@@ -60,12 +60,12 @@ end
 local function IsItemSoulbound(itemLink)
     local _, _, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item_GetItemInfo(itemLink)
     if bindType == 1 or bindType == 4 then return true end
-    
+
     local scanner = CreateFrame("GameTooltip", "GPCScanningTooltip", nil, "GameTooltipTemplate")
     scanner:SetOwner(WorldFrame, "ANCHOR_NONE")
     scanner:SetHyperlink(itemLink)
     for i = 1, scanner:NumLines() do
-        local text = _G["GPCScanningTooltipTextLeft"..i]:GetText()
+        local text = _G["GPCScanningTooltipTextLeft" .. i]:GetText()
         if text == ITEM_SOULBOUND then return true end
     end
     return false
@@ -82,7 +82,6 @@ frame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_ENTERING_WORLD" then
         print("|cff00ff00GuildPriceCheck Loaded:|r Listening for ?[Item] in Guild Chat.")
         SendPresence("PING")
-
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
         if prefix ~= PREFIX or sender == UnitName("player") then return end
@@ -97,21 +96,35 @@ frame:SetScript("OnEvent", function(self, event, ...)
         if msgType == "PING" then
             C_Timer.After(math.random(1, 15) / 10, function() SendPresence("PONG") end)
         end
-
     elseif event == "CHAT_MSG_GUILD" then
         local message, sender = ...
         -- Only proceed if the message starts with "?" AND I am the elected leader
         if not message:find("^%?") or not IsLeader() then return end
 
         for itemLink in message:gmatch("(|c.-|h.-|h|r)") do
-            if Auctionator and Auctionator.API and Auctionator.API.v1 then
-                local price = Auctionator.API.v1.GetAuctionPriceByItemLink(addonName, itemLink)
-                
-                if price and not IsItemSoulbound(itemLink) then
-                    local response = string.format("Price for %s: %s", itemLink, FormatMoney(price))
-                    C_ChatInfo_SendChatMessage(response, "GUILD")
-                end
+            local price = nil
+
+            if TSM_API then
+                price = TSM_API.GetCustomPriceValue("DBMarket", itemLink)
             end
+
+            if not price and Auctionator and Auctionator.API and Auctionator.API.v1 then
+                price = Auctionator.API.v1.GetAuctionPriceByItemLink(addonName, itemLink)
+            end
+
+            if IsItemSoulbound(itemLink) then
+                local response = string.format("No price available for %s. Soulbound item.", itemLink)
+                C_ChatInfo_SendChatMessage(response, "GUILD")
+                return
+            end
+            if not price then
+                local response = string.format("No price available for %s. No market data", itemLink)
+                C_ChatInfo_SendChatMessage(response, "GUILD")
+                return
+            end
+
+            local response = string.format("Price for %s: %s", itemLink, FormatMoney(price))
+            C_ChatInfo_SendChatMessage(response, "GUILD")
         end
     end
 end)
