@@ -49,7 +49,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
             local price = nil
 
             if TSM_API then
-                price = TSM_API.GetCustomPriceValue("DBMarket", TSM_API.ToItemString(itemLink))
+                price = TSM_API.GetCustomPriceValue("DBMinBuyout", TSM_API.ToItemString(itemLink))
             end
 
             if not price and Auctionator and Auctionator.API and Auctionator.API.v1 then
