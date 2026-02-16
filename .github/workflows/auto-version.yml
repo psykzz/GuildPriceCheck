@@ -51,7 +51,7 @@ jobs:
           NEW_VERSION: ${{ steps.version.outputs.new_version }}
         run: |
           # Check if tag already exists
-          if git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+          if git show-ref --tags --verify "refs/tags/$NEW_VERSION" >/dev/null 2>&1; then
             echo "Tag $NEW_VERSION already exists, skipping"
             exit 0
           fi
