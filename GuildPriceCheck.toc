@@ -2,7 +2,7 @@
 ## Title: GuildPriceCheck
 ## Notes: Replies to guild queries with Auctionator prices.
 ## Author: PsyKzz
-## Version: 0.0.1
+## Version: @project-version@
 ## RequiredDeps: Auctionator
 ## X-Curse-Project-ID: 1463417
 
