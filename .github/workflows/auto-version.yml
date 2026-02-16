@@ -20,8 +20,8 @@ jobs:
       - name: Get latest tag and increment patch version
         id: version
         run: |
-          # Get the latest semantic version tag, default to v0.0.0 if none exists
-          latest_tag=$(git tag -l 'v*.*.*' | sort -V | tail -n1)
+          # Get the latest semantic version tag using git's native version sorting
+          latest_tag=$(git tag -l 'v*.*.*' --sort=-version:refname | head -n1)
           if [ -z "$latest_tag" ]; then
             latest_tag="v0.0.0"
           fi
